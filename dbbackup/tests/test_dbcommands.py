@@ -34,11 +34,13 @@ class PostgreSQLSettingsTest(TestCase):
 
     def test_get_extension(self):
         extension = self.dbsettings.get_extension()
-        self.assertEqual('psql', extension)
+        self.assertEqual('dump', extension)
 
     def test_get_backup_commands(self):
-        wanted_commands = [['pg_dump', '--username={adminuser}',
-            '{databasename}', '>']]
+        wanted_commands = [[
+            'pg_dump', '--username={adminuser}', '--format=custom',
+            '--no-tablespaces', '{databasename}', '>',
+        ]]
         commands = self.dbsettings.get_backup_commands()
         self.assertEqual(commands, wanted_commands)
 
@@ -46,7 +48,10 @@ class PostgreSQLSettingsTest(TestCase):
         wanted_commands = [
             ['dropdb', '--username={adminuser}', '{databasename}'],
             ['createdb', '--username={adminuser}', '--owner={username}', '{databasename}'],
-            ['psql', '-d', '{databasename}', '-f', '-', '--username={adminuser}', '--single-transaction', '<']
+            [
+                'pg_restore', '--dbname={databasename}',
+                '--username={adminuser}', '--no-owner', '--single-transaction'
+            ]
         ]
         commands = self.dbsettings.get_restore_commands()
         self.assertEqual(commands, wanted_commands)
@@ -61,8 +66,14 @@ class PostgisSQLSettingsTest(PostgreSQLSettingsTest):
         wanted_commands = [
             ['dropdb', '--username={adminuser}', '{databasename}'],
             ['createdb', '--username={adminuser}', '--owner={username}', '{databasename}'],
-            ['psql', '--username={adminuser}', '-c', 'CREATE EXTENSION postgis;', '{databasename}'],
-            ['psql', '-d', '{databasename}', '-f', '-', '--username={adminuser}', '--single-transaction', '<']
+            [
+                'psql', '--username={adminuser}',
+                '-c', 'CREATE EXTENSION postgis;', '{databasename}'],
+            [
+                'pg_restore', '--dbname={databasename}',
+                '--username={adminuser}', '--no-owner', '--single-transaction',
+                '{backupfile}',
+            ]
         ]
         commands = self.dbsettings.get_restore_commands()
         self.assertEqual(commands, wanted_commands)

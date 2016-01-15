@@ -69,8 +69,11 @@ class Command(BaseDbBackupCommand):
             dir=dbbackup_settings.TMP_DIR)
         self.dbcommands.run_backup_commands(outputfile)
         if self.compress:
-            compressed_file, filename = utils.compress_file(outputfile, filename)
-            outputfile = compressed_file
+            if 'postgres' or 'postgis' in self.database and not self.quiet:
+                self.logger.info("Postgres dump is already compress")
+            else:
+                compressed_file, filename = utils.compress_file(outputfile, filename)
+                outputfile = compressed_file
         if self.encrypt:
             encrypted_file, filename = utils.encrypt_file(outputfile, filename)
             outputfile = encrypted_file

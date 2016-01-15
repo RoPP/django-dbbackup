@@ -136,12 +136,12 @@ class PostgreSQLSettings(BaseEngineSettings):
     """Settings for the PostgreSQL database engine"""
 
     def get_extension(self):
-        return getattr(settings, 'DBBACKUP_POSTGRESQL_EXTENSION', 'psql')
+        return getattr(settings, 'DBBACKUP_POSTGRESQL_EXTENSION', 'dump')
 
     def get_backup_commands(self):
         backup_commands = settings.POSTGRESQL_BACKUP_COMMANDS
         if not backup_commands:
-            command = 'pg_dump --username={adminuser}'
+            command = 'pg_dump --username={adminuser} --format=custom --no-tablespaces'
             if self.database_host:
                 command = '%s --host={host}' % command
             if self.database_port:
@@ -189,14 +189,15 @@ class PostgreSQLSettings(BaseEngineSettings):
 
     def import_command(self):
         """Constructs the PostgreSQL db import command"""
-        command = 'psql -d {databasename} -f - --username={adminuser}'
+        command = 'pg_restore --dbname={databasename} --username={adminuser} --no-owner'
         if self.database_host:
             command = '%s --host={host}' % command
         if self.database_port:
             command = '%s --port={port}' % command
         if settings.POSTGRESQL_RESTORE_SINGLE_TRANSACTION:
             command += ' --single-transaction '
-        return '%s <' % command
+        command += ' {backupfile}'
+        return command
 
     def get_env(self):
         """Extra environment variables to be passed to shell execution"""
@@ -237,6 +238,7 @@ class DBCommands(object):
         self.engine = settings.FORCE_ENGINE or self.database['ENGINE'].split('.')[-1]
         self.settings = self._get_settings()
         self.logger = logging.getLogger('dbbackup.dbbcommands')
+        self.backupfile = ''
 
     def _get_settings(self):
         """ Returns the proper settings dictionary. """
@@ -258,7 +260,8 @@ class DBCommands(object):
                     'password': self.database['PASSWORD'],
                     'databasename': self.database['NAME'],
                     'host': self.database['HOST'],
-                    'port': str(self.database['PORT'])}
+                    'port': str(self.database['PORT']),
+                    'backupfile': self.backupfile}
         return formater
 
     def replace(self, original_command):
@@ -300,6 +303,7 @@ class DBCommands(object):
 
     def run_commands(self, commands, stdin=None, stdout=None):
         """ Translate and run the specified commands. """
+        self.backupfile = stdin or stdout
         for command in commands:
             command = self.translate_command(command)
             if (command[0] == settings.READ_FILE):
